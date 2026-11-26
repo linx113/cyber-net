@@ -1,0 +1,517 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: cybernet-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres-main:
+    image: postgres:17
+    container_name: cybernet-postgres-main
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cybernet
+      POSTGRES_USER: cybernet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cybernet_dev}
+    volumes:
+      - postgres-main-data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cybernet -d cybernet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: cybernet-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: cybernet
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq_dev}
+    ports:
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  device-service-1:
+    build:
+      context: .
+      dockerfile: services/device-service/Dockerfile
+    container_name: cybernet-device-1
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://cybernet:${POSTGRES_PASSWORD:-cybernet_dev}@postgres-main:5432/cybernet
+      RABBITMQ_URL: amqp://cybernet:${RABBITMQ_PASSWORD:-rabbitmq_dev}@rabbitmq:5672/
+      INACTIVE_AFTER_SECONDS: ${INACTIVE_AFTER_SECONDS:-300}
+      REDIS_URL: redis://redis:6379/0
+      LOG_SERVICE_URL: http://logging-service:8000
+      INSTANCE_ID: device-service-1
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      logging-service:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  device-service-2:
+    build:
+      context: .
+      dockerfile: services/device-service/Dockerfile
+    container_name: cybernet-device-2
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://cybernet:${POSTGRES_PASSWORD:-cybernet_dev}@postgres-main:5432/cybernet
+      RABBITMQ_URL: amqp://cybernet:${RABBITMQ_PASSWORD:-rabbitmq_dev}@rabbitmq:5672/
+      INACTIVE_AFTER_SECONDS: ${INACTIVE_AFTER_SECONDS:-300}
+      REDIS_URL: redis://redis:6379/0
+      LOG_SERVICE_URL: http://logging-service:8000
+      INSTANCE_ID: device-service-2
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      logging-service:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  device-service-3:
+    build:
+      context: .
+      dockerfile: services/device-service/Dockerfile
+    container_name: cybernet-device-3
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://cybernet:${POSTGRES_PASSWORD:-cybernet_dev}@postgres-main:5432/cybernet
+      RABBITMQ_URL: amqp://cybernet:${RABBITMQ_PASSWORD:-rabbitmq_dev}@rabbitmq:5672/
+      INACTIVE_AFTER_SECONDS: ${INACTIVE_AFTER_SECONDS:-300}
+      REDIS_URL: redis://redis:6379/0
+      LOG_SERVICE_URL: http://logging-service:8000
+      INSTANCE_ID: device-service-3
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      logging-service:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    container_name: cybernet-analytics
+    restart: unless-stopped
+    environment:
+      RABBITMQ_URL: amqp://cybernet:${RABBITMQ_PASSWORD:-rabbitmq_dev}@rabbitmq:5672/
+      DATABASE_URL: postgresql+psycopg://cybernet:${POSTGRES_PASSWORD:-cybernet_dev}@postgres-main:5432/cybernet
+      LOG_SERVICE_URL: http://logging-service:8000
+      INACTIVE_AFTER_SECONDS: ${INACTIVE_AFTER_SECONDS:-300}
+      INACTIVITY_CHECK_INTERVAL_SECONDS: ${INACTIVITY_CHECK_INTERVAL_SECONDS:-30}
+      TEMPERATURE_WARNING_C: ${TEMPERATURE_WARNING_C:-40}
+      TEMPERATURE_CRITICAL_C: ${TEMPERATURE_CRITICAL_C:-60}
+      TEMPERATURE_MIN_C: ${TEMPERATURE_MIN_C:--20}
+      TEMPERATURE_MAX_C: ${TEMPERATURE_MAX_C:-60}
+      HUMIDITY_MIN: ${HUMIDITY_MIN:-20}
+      HUMIDITY_MAX: ${HUMIDITY_MAX:-80}
+      AIR_QUALITY_MIN: ${AIR_QUALITY_MIN:-25}
+      AIR_QUALITY_RANGE_MIN: ${AIR_QUALITY_RANGE_MIN:-0}
+      AIR_QUALITY_RANGE_MAX: ${AIR_QUALITY_RANGE_MAX:-100}
+      STREET_LIGHT_MIN: ${STREET_LIGHT_MIN:-0}
+      STREET_LIGHT_MAX: ${STREET_LIGHT_MAX:-1}
+      TRAFFIC_SENSOR_MIN: ${TRAFFIC_SENSOR_MIN:-0}
+      TRAFFIC_SENSOR_MAX: ${TRAFFIC_SENSOR_MAX:-100}
+      TRAFFIC_LIGHT_MIN: ${TRAFFIC_LIGHT_MIN:-0}
+      TRAFFIC_LIGHT_MAX: ${TRAFFIC_LIGHT_MAX:-3}
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      logging-service:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  alert-service:
+    build:
+      context: .
+      dockerfile: services/alert-service/Dockerfile
+    container_name: cybernet-alert
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://cybernet:${POSTGRES_PASSWORD:-cybernet_dev}@postgres-main:5432/cybernet
+      RABBITMQ_URL: amqp://cybernet:${RABBITMQ_PASSWORD:-rabbitmq_dev}@rabbitmq:5672/
+      LOG_SERVICE_URL: http://logging-service:8000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres-main:
+        condition: service_healthy
+      logging-service:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  command-service:
+    build:
+      context: .
+      dockerfile: services/command-service/Dockerfile
+    container_name: cybernet-command
+    environment:
+      DATABASE_URL: postgresql+psycopg://cybernet:${POSTGRES_PASSWORD:-cybernet_dev}@postgres-main:5432/cybernet
+      RABBITMQ_URL: amqp://cybernet:${RABBITMQ_PASSWORD:-rabbitmq_dev}@rabbitmq:5672/
+      LOG_SERVICE_URL: http://logging-service:8000
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      logging-service:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  load-test-api:
+    build:
+      context: .
+      dockerfile: services/load-tester/Dockerfile
+    container_name: cybernet-load-test-api
+    command: ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    environment:
+      RESULTS_FILE: /results/load-test.csv
+      API_URL: http://nginx/api/telemetry
+      LOG_SERVICE_URL: http://logging-service:8000
+    volumes:
+      - load-test-results:/results
+    networks:
+      - backend
+    depends_on:
+      logging-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: cybernet-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - backend
+      - frontend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    container_name: cybernet-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-cybernet_dev}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - backend
+      - frontend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: cybernet-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      device-service-1:
+        condition: service_healthy
+      device-service-2:
+        condition: service_healthy
+      device-service-3:
+        condition: service_healthy
+      command-service:
+        condition: service_healthy
+      alert-service:
+        condition: service_healthy
+      load-test-api:
+        condition: service_healthy
+    networks:
+      - backend
+      - frontend
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    container_name: cybernet-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      nginx:
+        condition: service_healthy
+    networks:
+      - frontend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  device-simulator:
+    build:
+      context: .
+      dockerfile: services/device-simulator/Dockerfile
+    container_name: cybernet-device-simulator
+    restart: unless-stopped
+    environment:
+      DEVICE_COUNT: ${DEVICE_COUNT:-100}
+      UPDATE_INTERVAL: ${UPDATE_INTERVAL:-5}
+      ANOMALY_RATE: ${ANOMALY_RATE:-0.05}
+      API_URL: http://nginx/api/telemetry
+      RABBITMQ_URL: amqp://cybernet:${RABBITMQ_PASSWORD:-rabbitmq_dev}@rabbitmq:5672/
+      LOG_SERVICE_URL: http://logging-service:8000
+    depends_on:
+      nginx:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      logging-service:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  load-tester:
+    build:
+      context: .
+      dockerfile: services/load-tester/Dockerfile
+    profiles: ["tools"]
+    environment:
+      API_URL: http://nginx/api/telemetry
+      CONCURRENCY_LEVELS: ${CONCURRENCY_LEVELS:-100,500,1000}
+      REQUESTS_PER_CLIENT: ${REQUESTS_PER_CLIENT:-1}
+      RESULTS_FILE: /results/load-test.csv
+    volumes:
+      - load-test-results:/results
+    depends_on:
+      nginx:
+        condition: service_healthy
+    networks:
+      - backend
+
+  db-backup:
+    image: postgres:17-alpine
+    profiles: ["tools"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cybernet_dev}
+    volumes:
+      - ./infrastructure/backups/backup.sh:/scripts/backup.sh:ro
+      - ./backups:/backups
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+      postgres-logs:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/scripts/backup.sh"]
+    networks:
+      - backend
+
+  postgres-logs:
+    image: postgres:17
+    container_name: cybernet-postgres-logs
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cybernet_logs
+      POSTGRES_USER: cybernet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cybernet_dev}
+    volumes:
+      - postgres-logs-data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cybernet -d cybernet_logs"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  logging-service:
+    build: ./services/logging-service
+    container_name: cybernet-logging
+    restart: unless-stopped
+    environment:
+      LOG_DATABASE_URL: postgresql+psycopg://cybernet:${POSTGRES_PASSWORD:-cybernet_dev}@postgres-logs:5432/cybernet_logs
+    depends_on:
+      postgres-logs:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  rabbitmq-data:
+  postgres-main-data:
+  postgres-logs-data:
+  load-test-results:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  backend:
+    driver: bridge
+    internal: true
+  frontend:
+    driver: bridge

@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+aio-pika
+sqlalchemy
+psycopg[binary]
+httpx
+prometheus-fastapi-instrumentator

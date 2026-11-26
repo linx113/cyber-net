@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: CyberNet
+    orgId: 1
+    folder: CyberNet
+    type: file
+    disableDeletion: true
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
